@@ -1,0 +1,74 @@
+import nltk
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import re
+import random
+
+# Download required NLTK data
+nltk.download('punkt')
+nltk.download('wordnet')
+nltk.download('stopwords')
+nltk.download('omw-1.4')
+
+# Knowledge Base (you can expand)
+KB = [
+    {"q": "hello hi hey", "a": "Hello! How can I help you today?"},
+    {"q": "what is your name", "a": "I'm ChatBuddy — your NLP chatbot."},
+    {"q": "how are you", "a": "I'm ready to help you!"},
+    {"q": "what can you do", "a": "I can answer questions from my knowledge base."},
+    {"q": "how to generate pdf report in python", "a": "Use pandas, matplotlib, and ReportLab to create PDF reports."},
+    {"q": "thanks thank you", "a": "You're welcome!"},
+    {"q": "bye goodbye", "a": "Goodbye!"},
+]
+
+kb_questions = [item["q"] for item in KB]
+kb_answers = [item["a"] for item in KB]
+
+lemmatizer = WordNetLemmatizer()
+_stopwords = set(stopwords.words("english"))
+
+def preprocess(text):
+    text = text.lower()
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    tokens = nltk.word_tokenize(text)
+    tokens = [lemmatizer.lemmatize(tok) for tok in tokens if tok not in _stopwords and tok.isalpha()]
+    return " ".join(tokens)
+
+processed_kb = [preprocess(s) for s in kb_questions]
+vectorizer = TfidfVectorizer()
+tfidf_kb = vectorizer.fit_transform(processed_kb)
+
+SIMILARITY_THRESHOLD = 0.35
+FALLBACKS = [
+    "Sorry, I didn't get that. Can you rephrase?",
+    "I don't know the answer to that yet.",
+]
+
+def get_response(user_input):
+    user_proc = preprocess(user_input)
+    if not user_proc.strip():
+        return "Please say something I can work with 😊"
+    user_vec = vectorizer.transform([user_proc])
+    sims = cosine_similarity(user_vec, tfidf_kb)[0]
+    best_idx = sims.argmax()
+    best_score = sims[best_idx]
+    if best_score >= SIMILARITY_THRESHOLD:
+        return kb_answers[best_idx]
+    if any(w in user_input.lower() for w in ["hello", "hi", "hey"]):
+        return "Hello! How can I help you today?"
+    return random.choice(FALLBACKS)
+
+def main():
+    print("===== ChatBuddy (NLP Chatbot) =====")
+    print("Type 'exit' or 'bye' to quit.")
+    while True:
+        user = input("You: ").strip()
+        if user.lower() in ("exit", "quit", "bye", "goodbye"):
+            print("Bot: Goodbye!")
+            break
+        print("Bot:", get_response(user))
+
+if __name__ == "__main__":
+    main()
